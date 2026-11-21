@@ -108,7 +108,7 @@ python3 scripts/check_contract.py https://lyftr-chat-app.onrender.com   # deploy
 
 ## 5. Setup Used
 
-- AI tools: Claude (code generation, review, debugging and deployment help)
+- AI tools: Claude (review, debugging)
 - Stack: Python 3.12, FastAPI, LiteLLM, SQLite, React 18 + Vite, Docker, nginx
 - Hosting: Render (backend), Vercel (frontend)
 
