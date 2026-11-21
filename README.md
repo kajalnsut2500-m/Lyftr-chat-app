@@ -4,10 +4,12 @@ React frontend, FastAPI backend, LiteLLM gateway and SQLite storage.
 
 ## 1. Live URLs
 
-- Frontend: `<your-frontend-url>`
-- Backend: `<your-backend-url>`
-- Health check: `<your-backend-url>/health`
-- GitHub: `<your-repo-url>`
+- Frontend: https://lyftr-chat-app.vercel.app/
+- Backend: https://lyftr-chat-app.onrender.com
+- Health check: https://lyftr-chat-app.onrender.com/health
+- GitHub: https://github.com/kajalnsut2500-m/Lyftr-chat-app
+
+The backend runs on Render's free tier and sleeps after about 15 minutes idle, so the first request can take 30–60 seconds. Open the health check first to wake it.
 
 ## 2. Run locally
 
@@ -40,7 +42,7 @@ cd frontend && npm install && npm run dev      # http://localhost:3000
 | Variable | Meaning |
 | --- | --- |
 | `LLM_API_KEYS` | Comma-separated key pool, at least 2. Ids are `key_1`, `key_2`, ... in order |
-| `LLM_MODEL` | LiteLLM model name (default `gemini/gemini-2.0-flash`) |
+| `LLM_MODEL` | LiteLLM model name (default `gemini/gemini-3.5-flash-lite`) |
 | `DATABASE_URL` | SQLite location, e.g. `sqlite:////data/app.db` |
 | `ALLOWED_ORIGINS` | Comma-separated CORS origins |
 | `ENABLE_FAILURE_SIMULATION` | `true` enables the `X-Simulate-Failure` header |
@@ -56,11 +58,11 @@ is the only retry path. `fallback_attempts` counts keys that failed before one a
 key fails the API returns `503 {"detail": "all providers unavailable"}` and stores nothing.
 Keys are never logged or returned.
 
-**Caching.** LiteLLM's in-memory cache is enabled at startup. LiteLLM builds the cache key from the
-model and the full message list (system prompt + history + new message); the API key is not part of
-it, so a reply produced through `key_2` still serves later hits. A hit reports `LLM_CACHE`, returns
-the identical reply and the usage stored with it, and has `key_id: null`. The cache is lost when the
-backend restarts; chat history is not.
+**Caching.** LiteLLM's in-memory cache is enabled at startup and warmed up once, so the first real
+cache hit is fast. LiteLLM builds the cache key from the model and the full message list (system
+prompt + history + new message); the API key is not part of it, so a reply produced through `key_2`
+still serves later hits. A hit reports `LLM_CACHE`, returns the identical reply and the usage stored
+with it, and has `key_id: null`. The cache is lost when the backend restarts; chat history is not.
 
 **SQLite session storage.** A `messages` table holds the history and a `sessions` table holds each
 session's optional system prompt. The user message and the reply are written in one transaction only
@@ -71,10 +73,14 @@ the backend rebuilds the prompt from SQLite. The file lives on a Docker volume a
 listed keys fail for that one request. It is honoured only when `ENABLE_FAILURE_SIMULATION=true`, and
 the cache is bypassed for that request so the failover is visible.
 
+**Hosting notes.** The deployed backend runs on Render's free tier, which has no persistent disk, so
+SQLite history resets when the service restarts. Locally, Docker keeps it in a named volume.
+`ENABLE_FAILURE_SIMULATION=true` is set on the deployed backend.
+
 ## 4. Verification
 
 ```bash
-B=<backend-url>
+B=https://lyftr-chat-app.onrender.com
 # cache hit: send the same first message from two different sessions
 curl -s $B/chat -H 'content-type: application/json' -d '{"session_id":"a1","message":"What is the capital of France?"}'
 curl -s $B/chat -H 'content-type: application/json' -d '{"session_id":"a2","message":"What is the capital of France?"}'   # LLM_CACHE, key_id null
@@ -93,13 +99,22 @@ curl -s $B/health
 In the UI, each assistant reply shows its source, model, latency and the input/output tokens for that request.
 The Settings panel has a field to send the `X-Simulate-Failure` header from the browser.
 
+To run all checks at once against a running backend:
+
+```bash
+python3 scripts/check_contract.py                                  # local
+python3 scripts/check_contract.py https://lyftr-chat-app.onrender.com   # deployed
+```
+
 ## 5. Setup Used
 
-- Editor / AI tools: *(fill in: e.g. VS Code, Claude)*
-- Python 3.12, FastAPI, LiteLLM, SQLite, React 18 + Vite, Docker, nginx
+- AI tools: Claude (code generation, review, debugging and deployment help)
+- Stack: Python 3.12, FastAPI, LiteLLM, SQLite, React 18 + Vite, Docker, nginx
+- Hosting: Render (backend), Vercel (frontend)
 
 ## 6. Bonus features
 
 - Optional per-session system prompt (UI field and `system_prompt` in the request).
 - Simulate-failure field in the UI for demos.
 - Backend tests (`make test`) covering cache, failover, 422/404/503, multi-turn and session isolation.
+- `scripts/check_contract.py`: runs 21 checks against a live backend.
